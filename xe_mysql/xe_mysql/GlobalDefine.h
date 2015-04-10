@@ -51,6 +51,18 @@ using namespace std;
 #define xe_uint64	unsigned long long
 #endif
 
+#ifndef xe_bool
+#define xe_bool		bool
+#endif
+
+#ifndef xe_float
+#define xe_float	float
+#endif
+
+#ifndef xe_double
+#define xe_double	double
+#endif
+
 #ifndef NULL
 #define NULL 0
 #endif

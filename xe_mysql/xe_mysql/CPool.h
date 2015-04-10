@@ -8,7 +8,7 @@
 #include <list>
 
 template<class T>
-CPool
+class CPool
 {
 public:
 	CPool(int nCount);
@@ -49,7 +49,7 @@ CPool<T>::~CPool()
 }
 
 template<class T>
-CPool<T>::Create()
+void CPool<T>::Create()
 {
 	CAutoLock lock(&m_cs);
 
@@ -62,7 +62,7 @@ CPool<T>::Create()
 }
 
 template<class T>
-CPool<T>::Step()
+void CPool<T>::Step()
 {
 	CAutoLock lock(&m_cs);
 
