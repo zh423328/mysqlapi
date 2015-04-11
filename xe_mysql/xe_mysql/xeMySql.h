@@ -9,11 +9,28 @@
 #include "mysql.h"
 #include <vector>
 
+
+//mysql连接
 class CXEMySqlCon
 {
 public:
+	CXEMySqlCon();
+	~CXEMySqlCon();
+
+
+	bool Connect(const char* Hostname,const char* Username, const char* Password, const char* DatabaseName,unsigned int port = 3306);
+	bool Close();
+
+	bool Reconnect();	//重新连接
+
 	MYSQL * m_pMySql;
 	CLock cs;
+
+	std::string m_szHostName;
+	std::string m_szUserName;
+	std::string m_szPassword;
+	std::string m_szDatabaseName;
+	xe_uint32   m_nPort;
 };
 
 class CXEMySqlTask : public ITask
@@ -92,7 +109,7 @@ public:
 	CXEMySql();
 	~CXEMySql();
 
-	bool Initialize(const char* Hostname, unsigned int port,const char* Username, const char* Password, const char* DatabaseName,xe_uint32 ConnectionCount,xe_uint32 JobCount);
+	bool Initialize(const char* Hostname,const char* Username, const char* Password, const char* DatabaseName,unsigned int port,xe_uint32 ConnectionCount = 5,xe_uint32 JobCount = 1000);
 
 	void Start();
 
@@ -104,11 +121,13 @@ public:
 	// pool func
 	void ExecuteQueryNoRet(char *query);
 
+	bool ExecuteSQL(MYSQL *pMySql,char * cmd,...);
+
 	bool SelectDB(char *db);
 
-	bool Query(char*cmd,MYSQL_RES *res);
+	bool Query(char*cmd,MYSQL_RES *res,...);
 
-	bool Query(char*cmd,CXEMySqlResult *data);
+	bool Query(char*cmd,CXEMySqlResult *data,...);
 
 	CXEMySqlCon * GetFreeCon();
 
@@ -119,12 +138,6 @@ public:
 	bool HandleError(CXEMySqlCon*pCon, xe_uint32 ErrorNumber);
 private:
 	CThreadPool m_ThreadPool;
-
-	std::string m_szHostName;
-	std::string m_szUserName;
-	std::string m_szPassword;
-	std::string m_szDatabaseName;
-	xe_uint32   m_nPort;
 
 	CPool<CXEMySqlTask> * m_pMySqlTaskPool;
 	std::vector<CXEMySqlCon*>	m_VectorCon;

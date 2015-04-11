@@ -26,7 +26,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	//HANDLE hThread = CreateThread(NULL,0,ThreadProc,NULL,0,NULL);
 
 	CXEMySql *pMysql = new CXEMySql();
-	pMysql->Initialize("10.10.10.12",3306,"root","123456","yxmr2_chardata",5,1000);
+	pMysql->Initialize("10.10.10.12","root","123456","123_chardata",3306,5,1000);
 
 
 	pMysql->Start();
@@ -36,13 +36,6 @@ int _tmain(int argc, _TCHAR* argv[])
 	for (int i = 0; i < 100;  ++i)
 	{
 		pMysql->ExecuteQueryNoRet("select * from chardata");
-		//if (res.FetchRecords())
-		//{
-		//	while(res.FetchRow())		//取一行数据
-		//	{
-
-		//	}
-		//}
 	}
 	DWORD dwEnd = GetTickCount();
 

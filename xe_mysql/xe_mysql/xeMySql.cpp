@@ -23,57 +23,36 @@ CXEMySql::~CXEMySql()
 	SAFE_DELETE(m_pWorker);
 }
 
-bool CXEMySql::Initialize( const char* Hostname, unsigned int port,const char* Username, const char* Password, const char* DatabaseName,xe_uint32 ConnectionCount,xe_uint32 JobCount )
+bool CXEMySql::Initialize( const char* Hostname,const char* Username, const char* Password, const char* DatabaseName,unsigned int port /*= 3306*/,xe_uint32 ConnectionCount /*= 5*/,xe_uint32 JobCount /*= 1000*/ )
 {
-	m_szHostName = Hostname;
-	m_nPort = port;
-	m_szUserName = Username;
-	m_szPassword = Password;
-	m_szDatabaseName = DatabaseName;
-	
-
 	for (xe_uint32 i = 0; i < ConnectionCount;++i)
 	{
 		CXEMySqlCon *pCon = new CXEMySqlCon();
-		
-		pCon->m_pMySql = mysql_init(NULL);		//初始化
 
-		if (pCon->m_pMySql == NULL)
-			continue;
+		bool bRet = true;
+		if (!pCon->Connect(Hostname,Username,Password,DatabaseName,port))
+		{
+			//连接test服务器
+			if (!pCon->Connect(Hostname,Username,Password,"test"))
+				return false;
+
+			if (!ExecuteSQL(pCon->m_pMySql,"CREATE DATABASE %s character set utf8",DatabaseName));
+				return false;
+
+			pCon->Close();
+
+			bRet =  pCon->Connect(Hostname,Username,Password,DatabaseName,port);		
+		}
+		if (bRet)
+		{
+			//		//初始化
+			m_VectorCon.push_back(pCon);
+		}
 		else
 		{
-			//连接
-			if (!mysql_real_connect(pCon->m_pMySql,Hostname,Username,Password,DatabaseName,m_nPort,NULL,0))
-			{
-				printf("数据库连接失败,原因如下: %s\n",mysql_error(pCon->m_pMySql));
-				return false;
-			}
-
-			if (!pCon->m_pMySql)
-			{
-				mysql_close(pCon->m_pMySql);
-				SAFE_DELETE(pCon);
-
-				return false;
-			}
-
-			//设置
-			if(mysql_options(pCon->m_pMySql, MYSQL_SET_CHARSET_NAME, "utf8"))
-			{
-				printf("MySQLDatabase Could not set utf8 character set.");
-				return false;
-			}
-
-			my_bool my_true =true;
-			if(mysql_options(pCon->m_pMySql, MYSQL_OPT_RECONNECT, &my_true))
-			{
-				printf("MySQLDatabase MYSQL_OPT_RECONNECT could not be set, connection drops may occur but will be counteracted.");
-				return false;
-			}
+			SAFE_DELETE(pCon);
 		}
 
-		//		//初始化
-		m_VectorCon.push_back(pCon);
 	}
 
 	m_pMySqlTaskPool = new CPool<CXEMySqlTask>(JobCount);
@@ -104,23 +83,12 @@ void CXEMySql::Stop()
 //重新连接
 bool CXEMySql::Reconnect( CXEMySqlCon *pCon )
 {
-	MYSQL * temp ,*temp2;
-
-	temp = mysql_init(NULL);
-	temp2 = mysql_real_connect(temp,m_szHostName.c_str(),m_szUserName.c_str(),m_szPassword.c_str(),m_szDatabaseName.c_str(),m_nPort,NULL,0);
-	if(temp2 == NULL)
+	if (pCon)
 	{
-		printf("MySQLDatabase Could not reconnect to database because of `%s`", mysql_error(temp));
-		mysql_close(temp);
-		return false;
+		return pCon->Reconnect();
 	}
 
-	if(pCon->m_pMySql != NULL)
-		mysql_close(pCon->m_pMySql);
-
-	pCon->m_pMySql= temp;
-
-	return true;
+	return false;
 }
 
 void CXEMySql::ExecuteQueryNoRet( char *query )
@@ -136,52 +104,87 @@ bool CXEMySql::SelectDB(char *db )
 	CXEMySqlCon *pCon = GetFreeCon();
 	if (pCon &&pCon->m_pMySql)
 	{
-		CAutoLock cs(&pCon->cs);
+		//CAutoLock cs(&pCon->cs);
 		if(mysql_select_db(pCon->m_pMySql,db) == 0)
 		{
+			pCon->cs.UnLock();
 			return true;
 		}
+	
+	}
+	if (pCon)
+	{
+		pCon->cs.UnLock();
 	}
 	return false;
 }
 
-bool CXEMySql::Query( char*cmd,MYSQL_RES *res )
+bool CXEMySql::Query( char*cmd,MYSQL_RES *res,...)
 {
 	CXEMySqlCon *pCon = GetFreeCon();
 	if (pCon &&pCon->m_pMySql)
 	{
+
+		char szQuery[1024] = {0};
+
+		va_list ap;
+		va_start(ap,res);
+		vsnprintf(szQuery,1023,cmd,ap);
+		va_end(ap);
+
 		//执行
-		CAutoLock cs(&pCon->cs);
+	//	CAutoLock cs(&pCon->cs);
 
 		//执行成功返回0
-		if (mysql_real_query(pCon->m_pMySql,cmd,strlen(cmd)) == 0)
+		if (mysql_real_query(pCon->m_pMySql,szQuery,strlen(szQuery)) == 0)
 		{
 			res = mysql_store_result(pCon->m_pMySql);
 
-			if(res)
-				return true;
+			if (pCon)
+			{
+				pCon->cs.UnLock();
+			}
+
+			return true;
 		}
 		else
 		{
 			//输出错误
-			printf("cmd:%s errorno:%d,error:%s\n",cmd, mysql_errno(pCon->m_pMySql),mysql_error(pCon->m_pMySql));
+			printf("cmd:%s errorno:%d,error:%s\n",szQuery, mysql_errno(pCon->m_pMySql),mysql_error(pCon->m_pMySql));
+
+			if (pCon)
+			{
+				pCon->cs.UnLock();
+			}
 
 			return HandleError(pCon,mysql_errno(pCon->m_pMySql));		//部分错误重新连接
 		}
 	}
 
+	if (pCon)
+	{
+		pCon->cs.UnLock();
+	}
+
 	return false;
 }
 
-bool CXEMySql::Query(char*cmd,CXEMySqlResult *data )
+bool CXEMySql::Query(char*cmd,CXEMySqlResult *data,...)
 {
 	CXEMySqlCon *pCon = GetFreeCon();
 	if (pCon &&pCon->m_pMySql)
 	{
-		CAutoLock cs(&pCon->cs);
+		//CAutoLock cs(&pCon->cs);
+
+		char szQuery[1024] = {0};
+
+		va_list ap;
+		va_start(ap,data);
+		vsnprintf(szQuery,1023,cmd,ap);
+		va_end(ap);
 
 		MYSQL_RES *res = NULL;
-		if (mysql_real_query(pCon->m_pMySql,cmd,strlen(cmd))==0)
+		if (mysql_real_query(pCon->m_pMySql,szQuery,strlen(szQuery))==0)
 		{
 			int nLength = mysql_field_count(pCon->m_pMySql);
 			if( nLength > 0)			//查看当前查询的列数
@@ -192,8 +195,20 @@ bool CXEMySql::Query(char*cmd,CXEMySqlResult *data )
 				{
 					data->SetRes(nLength,res);
 
+
+					if (pCon)
+					{
+						pCon->cs.UnLock();
+					}
+
 					return true;
 				}
+			}
+
+
+			if (pCon)
+			{
+				pCon->cs.UnLock();
 			}
 
 			return false;
@@ -201,10 +216,22 @@ bool CXEMySql::Query(char*cmd,CXEMySqlResult *data )
 		else
 		{
 			//输出错误
-			printf("cmd:%s errorno:%d,error:%s\n",cmd, mysql_errno(pCon->m_pMySql),mysql_error(pCon->m_pMySql));
+			printf("cmd:%s errorno:%d,error:%s\n",szQuery, mysql_errno(pCon->m_pMySql),mysql_error(pCon->m_pMySql));
+
+
+			if (pCon)
+			{
+				pCon->cs.UnLock();
+			}
 
 			return HandleError(pCon,mysql_errno(pCon->m_pMySql));		//部分错误重新连接
 		}
+	}
+
+
+	if (pCon)
+	{
+		pCon->cs.UnLock();
 	}
 
 	return false;
@@ -213,11 +240,14 @@ bool CXEMySql::Query(char*cmd,CXEMySqlResult *data )
 CXEMySqlCon * CXEMySql::GetFreeCon()
 {
 	xe_uint32 nCount = m_VectorCon.size();
+	if (nCount == 0)
+		return NULL;
+
 	xe_uint32 i = 0;
 	for (;;++i)
 	{
 		CXEMySqlCon *pCon = m_VectorCon.at(i%nCount);
-		if (pCon->cs.AttemptLock())
+		if (pCon->cs.AttemptLock())		//占用临界区
 			return pCon;
 	}
 
@@ -260,6 +290,33 @@ bool CXEMySql::HandleError( CXEMySqlCon*pCon, xe_uint32 ErrorNumber )
 			return Reconnect(pCon);
 		}
 		break;
+	}
+
+	return false;
+}
+
+bool CXEMySql::ExecuteSQL( MYSQL *pMySql,char * cmd,... )
+{
+	if (pMySql)
+	{
+		char szQuery[1024] = {0};
+
+		va_list ap;
+		va_start(ap,cmd);
+		vsnprintf(szQuery,1023,cmd,ap);
+		va_end(ap);
+
+		MYSQL_RES *res = NULL;
+		if (mysql_real_query(pMySql,szQuery,strlen(szQuery))==0)
+		{
+			return true;
+		}
+		else
+		{
+			//输出错误
+			printf("cmd:%s errorno:%d,error:%s\n",szQuery, mysql_errno(pMySql),mysql_error(pMySql));
+			return false;
+		}
 	}
 
 	return false;
@@ -457,5 +514,108 @@ xe_uint8* CXEMySqlResult::GetBLOB( const xe_int8* szField,xe_int32* pnLen )
 	return (xe_uint8*)"";
 }
 
+
+
+
+CXEMySqlCon::CXEMySqlCon()
+{
+	m_szHostName = "";
+	m_szUserName = "";
+	m_szPassword = "";
+	m_szDatabaseName = "";
+	m_nPort = 3306;
+
+	m_pMySql = NULL;
+}
+
+CXEMySqlCon::~CXEMySqlCon()
+{
+	Close();
+}
+
+bool CXEMySqlCon::Connect( const char* Hostname,const char* Username, const char* Password, const char* DatabaseName,unsigned int port /*= 3306*/ )
+{
+	Close();
+
+
+	m_szHostName = Hostname;
+	m_nPort = port;
+	m_szUserName = Username;
+	m_szPassword = Password;
+	m_szDatabaseName = DatabaseName;
+
+	m_pMySql = mysql_init(NULL);		//初始化
+
+	if (m_pMySql == NULL)
+	{
+		printf("mysql_init failed!\n");
+		return false;
+	}
+	else
+	{
+		//连接
+		if (!mysql_real_connect(m_pMySql,Hostname,Username,Password,DatabaseName,port,NULL,0))
+		{
+			printf("数据库连接失败,原因如下: %s\n",mysql_error(m_pMySql));
+			return false;
+		}
+
+
+		//连接
+		if (!m_pMySql)
+		{
+			mysql_close(m_pMySql);
+
+			return false;
+		}
+
+		//设置
+		if(mysql_options(m_pMySql, MYSQL_SET_CHARSET_NAME, "utf8"))
+		{
+			printf("MySQLDatabase Could not set utf8 character set.");
+			return false;
+		}
+
+		my_bool my_true =true;
+		if(mysql_options(m_pMySql, MYSQL_OPT_RECONNECT, &my_true))
+		{
+			printf("MySQLDatabase MYSQL_OPT_RECONNECT could not be set, connection drops may occur but will be counteracted.");
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool CXEMySqlCon::Close()
+{
+	if (m_pMySql)
+	{
+		mysql_close(m_pMySql);
+	}
+
+	return true;
+}
+
+bool CXEMySqlCon::Reconnect()
+{
+	MYSQL * temp ,*temp2;
+
+	temp = mysql_init(NULL);
+	temp2 = mysql_real_connect(temp,m_szHostName.c_str(),m_szUserName.c_str(),m_szPassword.c_str(),m_szDatabaseName.c_str(),m_nPort,NULL,0);
+	if(temp2 == NULL)
+	{
+		printf("MySQLDatabase Could not reconnect to database because of `%s`", mysql_error(temp));
+		mysql_close(temp);
+		return false;
+	}
+
+	if(m_pMySql != NULL)
+		mysql_close(m_pMySql);
+
+	m_pMySql= temp;
+
+	return true;
+}
 
 
