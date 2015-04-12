@@ -14,6 +14,8 @@ public:
 	ITask(){}
 
 	virtual ~ITask(){}
+
+	virtual void Init() = 0;
 };
 
 //工作者处理

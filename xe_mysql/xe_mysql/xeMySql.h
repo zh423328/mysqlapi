@@ -33,19 +33,50 @@ public:
 	xe_uint32   m_nPort;
 };
 
+//blob参数
+class DB_BLOB
+{
+public:
+	//
+	DB_BLOB(xe_uint8 *pData[],xe_uint32 dwlen[],xe_uint32 dwParamCount);
+	~DB_BLOB();
+
+	void Reset();
+
+	xe_uint8 **m_pData;
+	xe_uint32 *m_dwLen;
+	xe_uint32 m_wParamcount;
+};
+
 class CXEMySqlTask : public ITask
 {
 public:
 	CXEMySqlTask()
 	{
-		memset(szQuery,0,256);
+		m_pData = NULL;
+		Init();
 	}
 	~CXEMySqlTask()
 	{
+		Init();
+	}
 
+	void Init()
+	{
+		memset(szQuery,0,256);
+
+		SAFE_DELETE(m_pData);
+	}
+
+	void SetData(xe_uint8 *pData[],xe_uint32 dwlen[],xe_uint32 dwParamCount)
+	{
+		SAFE_DELETE(m_pData);
+		m_pData = new DB_BLOB(pData,dwlen,dwParamCount);
 	}
 
 	char szQuery[256];		//查询语句
+
+	DB_BLOB * m_pData;
 };
 
 //结果
@@ -85,6 +116,35 @@ private:
 
 	xe_int32		m_dwFieldCnt;		//结果集区域个数
 
+};
+
+//////////////////////////////////////////////////////////////////////////
+//下面是mysql预处理，个人不是非常推荐，只有可能在blob数据时才能快一点，但是更推荐把blob拆分更好
+//而制作2进制存储存操作,尽量不要这么设计
+//////////////////////////////////////////////////////////////////////////
+class CXEMySqlStmt
+{
+public:
+	CXEMySqlStmt(CXEMySqlCon *pCon);
+	~CXEMySqlStmt();
+
+	void SetSQL(char * szSQL);
+
+	//index 索引,pData数据，bufflen dwLen长度
+	void SetParam(int index,xe_uint8*pData, xe_uint32 bufflen,xe_uint32 * dwLen);
+	//绑定参数
+	bool BindParams();
+
+	//执行
+	bool Execute();	
+
+	//重置
+	bool Reset();
+private:
+	CXEMySqlCon*	m_pCon;
+	MYSQL_STMT*		m_pStmt;
+	MYSQL_BIND*		m_pParams;
+	xe_uint32		m_dwParamCount;		//参数个数
 };
 
 class CXEMySql;
@@ -128,6 +188,8 @@ public:
 	bool Query(char*cmd,MYSQL_RES *res,...);
 
 	bool Query(char*cmd,CXEMySqlResult *data,...);
+	
+	bool Query(char *cmd,DB_BLOB * pData);
 
 	CXEMySqlCon * GetFreeCon();
 

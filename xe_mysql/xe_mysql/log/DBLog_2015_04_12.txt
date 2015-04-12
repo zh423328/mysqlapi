@@ -1,0 +1,14 @@
+2015/04/12 09:30:31 select * from chardata
+2015/04/12 09:30:31 select * from chardata
+2015/04/12 09:30:42 select * from chardata
+2015/04/12 09:30:42 select * from chardata
+2015/04/12 12:44:42 select * from chardata
+2015/04/12 12:44:43 select * from chardata
+2015/04/12 12:57:26 select * from chardata
+2015/04/12 12:57:26 select * from chardata
+2015/04/12 12:57:50 select * from chardata
+2015/04/12 12:57:50 select * from chardata
+2015/04/12 12:59:16 select * from chardata
+2015/04/12 12:59:16 select * from chardata
+2015/04/12 14:05:50 select * from chardata
+2015/04/12 14:05:50 select * from chardata

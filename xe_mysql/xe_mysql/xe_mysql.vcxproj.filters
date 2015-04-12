@@ -16,6 +16,12 @@
     <Filter Include="MYSQLSDK">
       <UniqueIdentifier>{86d63663-bd2a-4646-aea2-505d1042a016}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Log">
+      <UniqueIdentifier>{4ba32a65-7029-4bfb-8081-e711f7cca597}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="crash">
+      <UniqueIdentifier>{ed992a54-f022-47a7-ab3c-f60c4fee56c8}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -42,6 +48,12 @@
     <ClInclude Include="xeMySql.h">
       <Filter>MYSQLSDK</Filter>
     </ClInclude>
+    <ClInclude Include="Singleton.h">
+      <Filter>MYSQLSDK</Filter>
+    </ClInclude>
+    <ClInclude Include="Log.h">
+      <Filter>Log</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -58,6 +70,9 @@
     </ClCompile>
     <ClCompile Include="xeMySql.cpp">
       <Filter>MYSQLSDK</Filter>
+    </ClCompile>
+    <ClCompile Include="Log.cpp">
+      <Filter>Log</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

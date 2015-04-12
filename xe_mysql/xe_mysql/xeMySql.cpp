@@ -1,4 +1,5 @@
 #include "xeMySql.h"
+#include "Log.h"
 
 void CXEMySqlWorker::ProcessTask( ITask *pTask )
 {
@@ -6,8 +7,22 @@ void CXEMySqlWorker::ProcessTask( ITask *pTask )
 	{
 		CXEMySqlTask *pMySqlTask = dynamic_cast<CXEMySqlTask*>(pTask);
 
-		MYSQL_RES res;
-		m_pMySql->Query(pMySqlTask->szQuery,&res);
+		if (pMySqlTask)
+		{
+			if (pMySqlTask->m_pData == NULL)
+			{
+				MYSQL_RES res;
+				m_pMySql->Query(pMySqlTask->szQuery,&res);
+			}
+			else
+			{
+				m_pMySql->Query(pMySqlTask->szQuery,pMySqlTask->m_pData);
+			}
+
+			//释放
+			m_pMySql->ReleaseJob(pMySqlTask);
+		}
+		
 	}
 }
 
@@ -36,7 +51,8 @@ bool CXEMySql::Initialize( const char* Hostname,const char* Username, const char
 			if (!pCon->Connect(Hostname,Username,Password,"test"))
 				return false;
 
-			if (!ExecuteSQL(pCon->m_pMySql,"CREATE DATABASE %s character set utf8",DatabaseName));
+			//直接指向
+			if (!ExecuteSQL(pCon->m_pMySql,"CREATE DATABASE %s character set utf8",DatabaseName))
 				return false;
 
 			pCon->Close();
@@ -122,6 +138,9 @@ bool CXEMySql::SelectDB(char *db )
 bool CXEMySql::Query( char*cmd,MYSQL_RES *res,...)
 {
 	CXEMySqlCon *pCon = GetFreeCon();
+
+	bool bRet = false;
+
 	if (pCon &&pCon->m_pMySql)
 	{
 
@@ -132,32 +151,24 @@ bool CXEMySql::Query( char*cmd,MYSQL_RES *res,...)
 		vsnprintf(szQuery,1023,cmd,ap);
 		va_end(ap);
 
-		//执行
-	//	CAutoLock cs(&pCon->cs);
-
 		//执行成功返回0
 		if (mysql_real_query(pCon->m_pMySql,szQuery,strlen(szQuery)) == 0)
 		{
+			sLog.OutPutDBStr(szQuery);
+
+
 			res = mysql_store_result(pCon->m_pMySql);
 
-			if (pCon)
-			{
-				pCon->cs.UnLock();
-			}
-
-			return true;
+			bRet = true;
+			//return true;
 		}
 		else
 		{
 			//输出错误
-			printf("cmd:%s errorno:%d,error:%s\n",szQuery, mysql_errno(pCon->m_pMySql),mysql_error(pCon->m_pMySql));
+			sLog.OutPutDBError("cmd:%s errorno:%d,error:%s\n",szQuery, mysql_errno(pCon->m_pMySql),mysql_error(pCon->m_pMySql));
 
-			if (pCon)
-			{
-				pCon->cs.UnLock();
-			}
 
-			return HandleError(pCon,mysql_errno(pCon->m_pMySql));		//部分错误重新连接
+			bRet = HandleError(pCon,mysql_errno(pCon->m_pMySql));		//部分错误重新连接
 		}
 	}
 
@@ -166,12 +177,14 @@ bool CXEMySql::Query( char*cmd,MYSQL_RES *res,...)
 		pCon->cs.UnLock();
 	}
 
-	return false;
+	return bRet;
 }
 
 bool CXEMySql::Query(char*cmd,CXEMySqlResult *data,...)
 {
 	CXEMySqlCon *pCon = GetFreeCon();
+
+	bool bRet = false;
 	if (pCon &&pCon->m_pMySql)
 	{
 		//CAutoLock cs(&pCon->cs);
@@ -186,8 +199,10 @@ bool CXEMySql::Query(char*cmd,CXEMySqlResult *data,...)
 		MYSQL_RES *res = NULL;
 		if (mysql_real_query(pCon->m_pMySql,szQuery,strlen(szQuery))==0)
 		{
-			int nLength = mysql_field_count(pCon->m_pMySql);
-			if( nLength > 0)			//查看当前查询的列数
+			sLog.OutPutDBStr(szQuery);
+
+			int nLength = mysql_field_count(pCon->m_pMySql);//查看当前查询的列数
+			if( nLength > 0)			
 			{
 				res = mysql_store_result(pCon->m_pMySql);		//返回结果集,没有行数返回NULL;
 
@@ -195,36 +210,18 @@ bool CXEMySql::Query(char*cmd,CXEMySqlResult *data,...)
 				{
 					data->SetRes(nLength,res);
 
-
-					if (pCon)
-					{
-						pCon->cs.UnLock();
-					}
-
-					return true;
+					bRet = true;
 				}
 			}
 
-
-			if (pCon)
-			{
-				pCon->cs.UnLock();
-			}
-
-			return false;
+			bRet = false;
 		}
 		else
 		{
 			//输出错误
-			printf("cmd:%s errorno:%d,error:%s\n",szQuery, mysql_errno(pCon->m_pMySql),mysql_error(pCon->m_pMySql));
+			sLog.OutPutDBError("cmd:%s errorno:%d,error:%s\n",szQuery, mysql_errno(pCon->m_pMySql),mysql_error(pCon->m_pMySql));
 
-
-			if (pCon)
-			{
-				pCon->cs.UnLock();
-			}
-
-			return HandleError(pCon,mysql_errno(pCon->m_pMySql));		//部分错误重新连接
+			bRet = HandleError(pCon,mysql_errno(pCon->m_pMySql));		//部分错误重新连接
 		}
 	}
 
@@ -234,7 +231,51 @@ bool CXEMySql::Query(char*cmd,CXEMySqlResult *data,...)
 		pCon->cs.UnLock();
 	}
 
-	return false;
+	return bRet;
+}
+
+bool CXEMySql::Query( char *cmd,DB_BLOB * pData )
+{
+	if (pData == NULL)
+	{
+		MYSQL_RES res;
+		return Query(cmd,&res);
+	}
+	else
+	{
+		CXEMySqlCon *pCon = GetFreeCon();
+
+		bool bRet = false;
+		if (pCon &&pCon->m_pMySql)
+		{
+			//CAutoLock cs(&pCon->cs);
+
+			CXEMySqlStmt stmt(pCon);
+			stmt.SetSQL(cmd);
+
+			//设置参数
+			for(xe_uint32 i = 0; i < pData->m_wParamcount;++i)
+			{
+				stmt.SetParam(i,pData->m_pData[i],pData->m_dwLen[i],&(pData->m_dwLen[i]));
+			}
+
+			//绑定和执行
+			bRet = stmt.BindParams();
+			if (bRet)
+			{
+				bRet = stmt.Execute();
+			}
+		}
+
+
+		if (pCon)
+		{
+			pCon->cs.UnLock();
+		}
+
+		return bRet;
+	}
+	
 }
 
 CXEMySqlCon * CXEMySql::GetFreeCon()
@@ -271,7 +312,9 @@ void CXEMySql::ReleaseJob( CXEMySqlTask*job )
 {
 	if (job)
 	{
-		memset(job->szQuery,0,256);
+		//memset(job->szQuery,0,256);
+
+		job->Init();
 
 		m_pMySqlTaskPool->Free(job);
 	}
@@ -309,12 +352,13 @@ bool CXEMySql::ExecuteSQL( MYSQL *pMySql,char * cmd,... )
 		MYSQL_RES *res = NULL;
 		if (mysql_real_query(pMySql,szQuery,strlen(szQuery))==0)
 		{
+			sLog.OutPutDBStr(szQuery);
 			return true;
 		}
 		else
 		{
 			//输出错误
-			printf("cmd:%s errorno:%d,error:%s\n",szQuery, mysql_errno(pMySql),mysql_error(pMySql));
+			sLog.OutPutDBError("cmd:%s errorno:%d,error:%s\n",szQuery, mysql_errno(pMySql),mysql_error(pMySql));
 			return false;
 		}
 	}
@@ -619,3 +663,159 @@ bool CXEMySqlCon::Reconnect()
 }
 
 
+
+CXEMySqlStmt::CXEMySqlStmt( CXEMySqlCon *pCon )
+{
+	m_pCon = pCon;
+	m_pStmt = NULL;
+	m_dwParamCount = 0;
+	m_pParams = NULL;
+}
+
+CXEMySqlStmt::~CXEMySqlStmt()
+{
+	Reset();
+}
+
+void CXEMySqlStmt::SetSQL( char * szSQL )
+{
+	if (szSQL == NULL || m_pCon == NULL || m_pCon->m_pMySql == NULL)
+		return;
+
+	//重置消息
+	if (!Reset())
+		return;
+
+	m_pStmt = mysql_stmt_init(m_pCon->m_pMySql);		//句柄
+	if (m_pStmt == NULL)
+	{
+		sLog.OutPutDBError("errno:%d error:%s",mysql_errno(m_pCon->m_pMySql),mysql_error(m_pCon->m_pMySql));
+		return;
+	}
+
+	//准备失败
+	if (mysql_stmt_prepare(m_pStmt,szSQL,strlen(szSQL)))
+	{
+		sLog.OutPutDBError("cmd:%s,errno:%d error:%s",szSQL,mysql_errno(m_pCon->m_pMySql),mysql_error(m_pCon->m_pMySql));
+		return;
+	}
+
+	m_dwParamCount = mysql_stmt_param_count(m_pStmt);		//需要多少个参数
+	if (m_dwParamCount > 0)
+	{
+		m_pParams = new MYSQL_BIND[m_dwParamCount];
+	}
+}
+
+//设置参数
+void CXEMySqlStmt::SetParam( int index,xe_uint8*pData, xe_uint32 bufflen,xe_uint32 * dwLen )
+{
+	if (m_pStmt == NULL || m_pCon == NULL || m_pCon->m_pMySql == NULL)
+		return;
+
+	if (index < m_dwParamCount)
+	{
+		m_pParams[index].buffer_type = MYSQL_TYPE_BLOB;
+		m_pParams[index].buffer = pData;
+		m_pParams[index].buffer_length  = bufflen;
+		m_pParams[index].length = (unsigned long*)dwLen;
+		if(pData != NULL)
+			m_pParams[index].is_null = (my_bool*)0;
+		else
+			m_pParams[index].is_null = (my_bool*)1;
+		m_pParams[index].is_unsigned = false;	
+	}
+}
+
+//准备参数
+bool CXEMySqlStmt::BindParams()
+{
+	if (m_pStmt == NULL || m_pCon == NULL || m_pCon->m_pMySql == NULL)
+		return false;
+
+	if (mysql_stmt_bind_param(m_pStmt,m_pParams))
+	{
+		sLog.OutPutDBError("errno:%d error:%s",mysql_errno(m_pCon->m_pMySql),mysql_error(m_pCon->m_pMySql));
+		return false;
+	}
+
+	return true;
+}
+
+//执行
+bool CXEMySqlStmt::Execute()
+{
+	if (m_pStmt == NULL || m_pCon == NULL || m_pCon->m_pMySql == NULL)
+		return false;
+
+	if(mysql_stmt_execute(m_pStmt))
+	{
+		sLog.OutPutDBError("errno:%d error:%s",mysql_errno(m_pCon->m_pMySql),mysql_error(m_pCon->m_pMySql));
+		return false;
+	}
+
+	return true;
+}
+
+bool CXEMySqlStmt::Reset()
+{
+	if (m_pStmt)
+	{
+		//关闭
+		if (mysql_stmt_close(m_pStmt))
+		{
+			if (m_pCon && m_pCon->m_pMySql)
+				sLog.OutPutDBError("errno:%d error:%s",mysql_errno(m_pCon->m_pMySql),mysql_error(m_pCon->m_pMySql));
+
+			return false;
+		}
+
+		m_pStmt = NULL;
+	}
+
+	SAFE_DELETE_ARRAY(m_pParams);
+
+	m_dwParamCount = 0;
+
+	return true;
+}
+
+DB_BLOB::DB_BLOB( xe_uint8 *pData[],xe_uint32 dwlen[],xe_uint32 dwParamCount )
+{
+	Reset();
+
+	m_wParamcount = dwParamCount;
+
+	m_pData = new xe_uint8 *[dwParamCount];
+	m_dwLen = new xe_uint32[dwParamCount];
+
+	for (xe_uint32 i = 0; i < m_wParamcount; ++i)
+	{
+		m_pData[i] = new xe_uint8[dwlen[i]];
+		memcpy(m_pData[i],pData[i],dwlen[i]);
+	}
+	
+	memcpy(m_dwLen,dwlen,sizeof(xe_uint32)*dwParamCount);
+}
+
+void DB_BLOB::Reset()
+{
+	if (m_pData)
+	{
+		for (xe_uint32 i = 0; i < m_wParamcount;++i)
+		{
+			SAFE_DELETE_ARRAY(m_pData[i])
+		}
+
+		SAFE_DELETE_ARRAY(m_dwLen);
+	}
+
+	m_pData = NULL;
+	m_dwLen = NULL;
+	m_wParamcount = 0;
+}
+
+DB_BLOB::~DB_BLOB()
+{
+	Reset();
+}

@@ -12,6 +12,10 @@ using namespace std;
 
 #pragma comment(lib,"ws2_32.lib")
 
+//¾­ÓÃwarnning
+#pragma warning(disable:4996)
+#pragma warning(disable:4018)
+
 //1×Ö½Ú
 #ifndef xe_int8
 #define xe_int8		char

@@ -103,12 +103,15 @@ DWORD WINAPI CThreadPool::WorkerProc( void* p )
 				IWorker *pWorker = reinterpret_cast<IWorker*>(pN1);
 				ITask* pTask = reinterpret_cast<ITask*>(pN2);
 
-				pPool->ChangeStatus(dwThreadIdx,true);
+				//pPool->ChangeStatus(dwThreadIdx,true);
 				//完成任务
 				if (pWorker)
 					pWorker->ProcessTask(pTask);
 
-				pPool->ChangeStatus(dwThreadIdx,false);
+				//释放task
+				
+
+				//pPool->ChangeStatus(dwThreadIdx,false);
 			}
 		}
 	}
