@@ -1,0 +1,24 @@
+2015/04/13 03:31:10 cmd:select * from chardata errorno:1146,error:Table 'ioslz_chardata.chardata' doesn't exist
+
+2015/04/13 03:31:10 cmd:select * from chardata errorno:1146,error:Table 'ioslz_chardata.chardata' doesn't exist
+
+2015/04/13 03:31:14 cmd:select * from chardata errorno:1146,error:Table 'ioslz_chardata.chardata' doesn't exist
+
+2015/04/13 03:31:14 cmd:select * from chardata errorno:1146,error:Table 'ioslz_chardata.chardata' doesn't exist
+
+2015/04/13 03:31:50 cmd:select * from chardata errorno:1146,error:Table 'ioslz_chardata.chardata' doesn't exist
+
+2015/04/13 03:31:50 cmd:select * from chardata errorno:1146,error:Table 'ioslz_chardata.chardata' doesn't exist
+
+2015/04/13 03:32:04 cmd:select * from chardata errorno:1146,error:Table 'ioslz_chardata.chardata' doesn't exist
+
+2015/04/13 03:32:04 cmd:select * from chardata errorno:1146,error:Table 'ioslz_chardata.chardata' doesn't exist
+
+2015/04/13 03:32:25 cmd:select * from chardata errorno:1146,error:Table 'ioslz_chardata.chardata' doesn't exist
+
+2015/04/13 03:32:25 cmd:select * from chardata errorno:1146,error:Table 'ioslz_chardata.chardata' doesn't exist
+
+2015/04/13 03:34:09 cmd:select * from chardata errorno:1146,error:Table 'ioslz_chardata.chardata' doesn't exist
+
+2015/04/13 03:34:16 cmd:select * from chardata errorno:1146,error:Table 'ioslz_chardata.chardata' doesn't exist
+

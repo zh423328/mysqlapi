@@ -54,6 +54,12 @@
     <ClInclude Include="Log.h">
       <Filter>Log</Filter>
     </ClInclude>
+    <ClInclude Include="crashhandle.h">
+      <Filter>crash</Filter>
+    </ClInclude>
+    <ClInclude Include="WheatyExceptionReport.h">
+      <Filter>crash</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -73,6 +79,12 @@
     </ClCompile>
     <ClCompile Include="Log.cpp">
       <Filter>Log</Filter>
+    </ClCompile>
+    <ClCompile Include="crashhandle.cpp">
+      <Filter>crash</Filter>
+    </ClCompile>
+    <ClCompile Include="WheatyExceptionReport.cpp">
+      <Filter>crash</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

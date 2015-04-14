@@ -6,6 +6,7 @@
 #include "stdafx.h"
 #include "xeMySql.h"
 #include "log.h"
+#include "crashhandle.h"
 
 DWORD WINAPI ThreadProc(void *pParam)
 {
@@ -54,7 +55,14 @@ BOOL CtrlHandler( DWORD fdwCtrlType )
 int _tmain(int argc, _TCHAR* argv[])
 {
 	//设置
+	DWORD address1, address2;
+	__asm mov address1, offset begindecrypt;
+	__asm mov address2, offset enddecrypt;
+
+begindecrypt:
 	SetConsoleCtrlHandler((PHANDLER_ROUTINE)CtrlHandler,true);		//注册一个钩子
+
+	//InstallMyExceptHandle();
 
 	CXEMySql *pMysql = new CXEMySql();
 	bool bRet = pMysql->Initialize("127.0.0.1","root","123456","ioslz_chardata",3306,5,1000);
@@ -75,6 +83,8 @@ int _tmain(int argc, _TCHAR* argv[])
 	}
 
 
+	int *a = NULL;
+	*a = 1;
 	///*pMysql->Stop();*/
 	
 	while (true)
@@ -89,6 +99,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	}
 
 	system("pause");
+enddecrypt:
 	return 0;
 }
 
